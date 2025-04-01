@@ -116,4 +116,17 @@ class Order extends Model
                     ->with(['orderLines.product'])
                     ->latest();
     }
+
+    //REVIEW
+    public function reviews()
+{
+    return $this->hasManyThrough(
+        Review::class,
+        OrderLine::class,
+        'order_id', // Foreign key on OrderLine table
+        'product_id', // Foreign key on Review table
+        'id', // Local key on Order table
+        'product_id' // Local key on OrderLine table
+    );
+}
 }

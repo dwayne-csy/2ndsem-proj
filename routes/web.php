@@ -82,7 +82,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/orders/history', [OrderController::class, 'history'])->name('orders.history');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
 
+
     Route::post('/reviews', [ReviewController::class, 'store'])->name('reviews.store');
+    Route::get('/reviews/get', [ReviewController::class, 'getReview'])->name('reviews.get');
+    Route::get('/reviews/check', [ReviewController::class, 'check'])->name('reviews.check');
 });
 
     

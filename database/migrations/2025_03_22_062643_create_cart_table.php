@@ -13,6 +13,8 @@ return new class extends Migration
     {
         Schema::create('cart', function (Blueprint $table) {
             $table->id();
+
+            $table->timestamps();
             
             // Use the same column type as your users table's primary key
             $table->unsignedBigInteger('user_id');

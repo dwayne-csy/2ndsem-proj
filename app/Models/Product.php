@@ -49,7 +49,7 @@ class Product extends Model
 
     public function reviews()
     {
-        return $this->hasMany(Review::class, 'product_id'); // Explicitly specify foreign key
+        return $this->hasMany(Review::class, 'product_id', 'product_id');
     }
     
     public function userReview($userId)

@@ -96,24 +96,10 @@
                                         @endfor
                                         <span class="ms-2">{{ number_format($avgRating, 1) }} ({{ $p->reviews->count() }} reviews)</span>
                                     </div>
-                                    
-                                    <!-- Show user's review if exists -->
-                                    @if(auth()->check() && $p->userReview(auth()->id()))
-                                        @php $userReview = $p->userReview(auth()->id()); @endphp
-                                        <div class="bg-light p-2 rounded">
-                                            <div class="d-flex justify-content-between">
-                                                <strong>Your Review:</strong>
-                                                <div>
-                                                    @for($i = 1; $i <= 5; $i++)
-                                                        <i class="fas fa-star {{ $i <= $userReview->rating ? 'text-warning' : 'text-secondary' }}"></i>
-                                                    @endfor
-                                                </div>
-                                            </div>
-                                            @if($userReview->comment)
-                                                <p class="mb-0 mt-1">"{{ $userReview->comment }}"</p>
-                                            @endif
-                                        </div>
-                                    @endif
+                                </div>
+                            @else
+                                <div class="mb-3 text-muted">
+                                    <i class="far fa-star"></i> No reviews yet
                                 </div>
                             @endif
                             
@@ -123,48 +109,73 @@
                                 <button type="submit" class="btn btn-primary">Add to Cart</button>
                             </form>
                             
-                            <!-- Review Button (only for authenticated users) -->
-                            @auth
-                                <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#reviewModal-{{ $p->product_id }}">
-                                    <i class="fas fa-star me-1"></i>
-                                    {{ $p->userReview(auth()->id()) ? 'Edit Review' : 'Add Review' }}
+                            <!-- View Reviews Button -->
+                            @if($p->reviews->count() > 0)
+                                <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#reviewsModal-{{ $p->product_id }}">
+                                    <i class="fas fa-comment me-1"></i> View Reviews
                                 </button>
-                            @endauth
+                            @endif
                         </div>
                     </div>
                 </div>
 
-                <!-- Review Modal for each product -->
-                <div class="modal fade" id="reviewModal-{{ $p->product_id }}" tabindex="-1" aria-labelledby="reviewModalLabel" aria-hidden="true">
-                    <div class="modal-dialog">
+                <!-- Reviews Modal for each product -->
+                <div class="modal fade" id="reviewsModal-{{ $p->product_id }}" tabindex="-1" aria-labelledby="reviewsModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
                         <div class="modal-content">
                             <div class="modal-header">
-                                <h5 class="modal-title" id="reviewModalLabel">Review {{ $p->product_name }}</h5>
+                                <h5 class="modal-title" id="reviewsModalLabel">Reviews for {{ $p->product_name }}</h5>
                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
-                            <form action="{{ route('reviews.store') }}" method="POST">
-                                @csrf
-                                <input type="hidden" name="product_id" value="{{ $p->product_id }}">
-                                <div class="modal-body">
-                                    <div class="mb-3">
-                                        <label class="form-label">Rating</label>
-                                        <div class="rating-stars">
-                                            @for($i = 1; $i <= 5; $i++)
-                                                <i class="far fa-star star" data-rating="{{ $i }}" style="cursor: pointer; font-size: 1.5rem; margin-right: 5px;"></i>
-                                            @endfor
-                                            <input type="hidden" name="rating" id="rating-{{ $p->product_id }}" value="{{ $p->userReview(auth()->id())->rating ?? 0 }}">
+                            <div class="modal-body">
+                                @if($p->reviews->count() > 0)
+                                    <div class="mb-4">
+                                        <div class="d-flex align-items-center">
+                                            <h4 class="me-3">{{ number_format($avgRating, 1) }}</h4>
+                                            <div>
+                                                <div class="d-flex mb-1">
+                                                    @for($i = 1; $i <= 5; $i++)
+                                                        @if($i <= $fullStars)
+                                                            <i class="fas fa-star text-warning"></i>
+                                                        @elseif($i == $fullStars + 1 && $hasHalfStar)
+                                                            <i class="fas fa-star-half-alt text-warning"></i>
+                                                        @else
+                                                            <i class="far fa-star text-warning"></i>
+                                                        @endif
+                                                    @endfor
+                                                </div>
+                                                <p class="mb-0">{{ $p->reviews->count() }} reviews</p>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div class="mb-3">
-                                        <label for="comment-{{ $p->product_id }}" class="form-label">Review (optional)</label>
-                                        <textarea class="form-control" id="comment-{{ $p->product_id }}" name="comment" rows="3">{{ $p->userReview(auth()->id())->comment ?? '' }}</textarea>
+                                    
+                                    <div class="reviews-list">
+                                        @foreach($p->reviews as $review)
+                                            <div class="review-item mb-3 pb-3 border-bottom">
+                                                <div class="d-flex justify-content-between mb-2">
+                                                    <strong>{{ $review->user->name ?? 'Anonymous' }}</strong>
+                                                    <div>
+                                                        @for($i = 1; $i <= 5; $i++)
+                                                            <i class="fas fa-star {{ $i <= $review->rating ? 'text-warning' : 'text-secondary' }}"></i>
+                                                        @endfor
+                                                    </div>
+                                                </div>
+                                                @if($review->comment)
+                                                    <p class="mb-0">"{{ $review->comment }}"</p>
+                                                @else
+                                                    <p class="text-muted mb-0">No comment provided</p>
+                                                @endif
+                                                <small class="text-muted d-block mt-2">{{ $review->created_at->format('M d, Y') }}</small>
+                                            </div>
+                                        @endforeach
                                     </div>
-                                </div>
-                                <div class="modal-footer">
-                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                                    <button type="submit" class="btn btn-primary">Submit Review</button>
-                                </div>
-                            </form>
+                                @else
+                                    <p class="text-center">No reviews yet for this product.</p>
+                                @endif
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -188,44 +199,4 @@
 @section('scripts')
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Initialize star rating functionality for each product
-        document.querySelectorAll('.rating-stars .star').forEach(star => {
-            star.addEventListener('click', function() {
-                const rating = parseInt(this.getAttribute('data-rating'));
-                const modalId = this.closest('.modal').id;
-                const productId = modalId.split('-')[1];
-                const ratingInput = document.getElementById(`rating-${productId}`);
-                
-                // Update selected rating
-                ratingInput.value = rating;
-                
-                // Update star display
-                const stars = this.parentElement.querySelectorAll('.star');
-                stars.forEach((s, index) => {
-                    if (index < rating) {
-                        s.classList.remove('far');
-                        s.classList.add('fas', 'text-warning');
-                    } else {
-                        s.classList.remove('fas', 'text-warning');
-                        s.classList.add('far');
-                    }
-                });
-            });
-            
-            // Initialize stars if editing existing review
-            const modalId = star.closest('.modal').id;
-            const productId = modalId.split('-')[1];
-            const ratingInput = document.getElementById(`rating-${productId}`);
-            if (ratingInput.value > 0) {
-                const rating = parseInt(ratingInput.value);
-                if (parseInt(star.getAttribute('data-rating')) <= rating) {
-                    star.classList.remove('far');
-                    star.classList.add('fas', 'text-warning');
-                }
-            }
-        });
-    });
-</script>
 @endsection

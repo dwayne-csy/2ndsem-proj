@@ -2,7 +2,6 @@
 
 @section('content')
 <div class="container py-4">
-    <!-- Success/Error Messages -->
     @if(session('success'))
         <div class="alert alert-success alert-dismissible fade show">
             {{ session('success') }}
@@ -86,16 +85,27 @@
                                             <i class="fas fa-eye me-1"></i> Details
                                         </a>
                                         @if($order->status === 'accepted')
-                                            @if($order->review)
-                                                <button class="btn btn-sm btn-info rounded-pill px-3" disabled>
-                                                    <i class="fas fa-check me-1"></i> Reviewed
-                                                </button>
-                                            @else
+                                            @php
+                                                // Get first product in order that hasn't been reviewed by current user
+                                                $unreviewedProduct = $order->orderLines->first(function($line) {
+                                                    return !$line->product->reviews->where('user_id', auth()->id())->count();
+                                                })->product ?? null;
+                                                
+                                                // Or get first product if you want to allow multiple reviews per product
+                                                // $unreviewedProduct = $order->orderLines->first()->product ?? null;
+                                            @endphp
+                                            
+                                            @if($unreviewedProduct)
                                                 <button class="btn btn-sm btn-success rounded-pill px-3 review-btn" 
                                                         data-bs-toggle="modal" 
                                                         data-bs-target="#reviewModal"
-                                                        data-order-id="{{ $order->id }}">
+                                                        data-order-id="{{ $order->id }}"
+                                                        data-product-id="{{ $unreviewedProduct->product_id }}">
                                                     <i class="fas fa-star me-1"></i> Review
+                                                </button>
+                                            @else
+                                                <button class="btn btn-sm btn-info rounded-pill px-3" disabled>
+                                                    <i class="fas fa-check me-1"></i> Reviewed
                                                 </button>
                                             @endif
                                         @endif
@@ -125,15 +135,16 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-light">
-                <h5 class="modal-title" id="reviewModalLabel">Rate Your Order</h5>
+                <h5 class="modal-title" id="reviewModalLabel">Rate Your Product</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="reviewForm" method="POST" action="{{ route('reviews.store') }}">
                 @csrf
                 <input type="hidden" name="order_id" id="order_id">
+                <input type="hidden" name="product_id" id="product_id">
                 <div class="modal-body">
                     <div class="text-center mb-4">
-                        <h6 class="mb-3">How was your experience?</h6>
+                        <h6 class="mb-3">How was your experience with this product?</h6>
                         <div class="rating-stars mb-2">
                             <i class="far fa-star fa-2x star" data-rating="1"></i>
                             <i class="far fa-star fa-2x star" data-rating="2"></i>
@@ -146,7 +157,7 @@
                     </div>
                     <div class="mb-3">
                         <label for="comment" class="form-label">Your Review (Optional)</label>
-                        <textarea class="form-control" id="comment" name="comment" rows="3" placeholder="What did you like or dislike?"></textarea>
+                        <textarea class="form-control" id="comment" name="comment" rows="3" placeholder="Share your thoughts about this product..."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer border-0">
@@ -159,24 +170,6 @@
 </div>
 
 <style>
-    .table-hover tbody tr:hover {
-        background-color: rgba(13, 110, 253, 0.05);
-        transition: background-color 0.2s ease;
-    }
-    .badge {
-        font-size: 0.85rem;
-        letter-spacing: 0.5px;
-    }
-    .card {
-        border-radius: 12px;
-        overflow: hidden;
-    }
-    .table th {
-        font-weight: 600;
-        text-transform: uppercase;
-        font-size: 0.8rem;
-        letter-spacing: 0.5px;
-    }
     .rating-stars {
         font-size: 2rem;
         display: inline-block;
@@ -187,102 +180,113 @@
         transition: all 0.2s;
         color: #e4e5e9;
     }
-    .rating-stars .star.selected {
+    .rating-stars .star.selected,
+    .rating-stars .star.hovered {
         color: #ffc107;
     }
     .rating-stars .star.hovered {
-        color: #ffc107;
         transform: scale(1.1);
     }
-    #rating-text.text-danger {
-        color: #dc3545 !important;
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        20%, 60% { transform: translateX(-5px); }
+        40%, 80% { transform: translateX(5px); }
     }
 </style>
 
 @section('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Set order ID when review button is clicked
-        const reviewButtons = document.querySelectorAll('.review-btn');
-        const stars = document.querySelectorAll('.star');
-        const ratingInput = document.getElementById('rating');
-        const ratingText = document.getElementById('rating-text');
+        const reviewModal = document.getElementById('reviewModal');
         
-        // Rating messages
-        const ratingMessages = [
-            "Tap to rate",
-            "Poor",
-            "Fair",
-            "Good",
-            "Very Good",
-            "Excellent"
-        ];
-
-        // Initialize stars
-        function resetStars() {
-            stars.forEach(star => {
-                star.classList.remove('selected', 'hovered');
-                star.classList.add('far');
-                star.classList.remove('fas');
-            });
-            ratingInput.value = "0";
-            ratingText.textContent = ratingMessages[0];
-            ratingText.classList.remove('text-danger');
-        }
-
-        // Handle review button click
-        reviewButtons.forEach(button => {
-            button.addEventListener('click', function() {
-                document.getElementById('order_id').value = this.getAttribute('data-order-id');
-                resetStars();
-            });
-        });
-
-        // Handle star clicks
-        stars.forEach(star => {
-            star.addEventListener('click', function() {
-                const rating = parseInt(this.getAttribute('data-rating'));
-                
-                // Update all stars
-                stars.forEach((s, index) => {
-                    const starNum = parseInt(s.getAttribute('data-rating'));
-                    if (starNum <= rating) {
-                        s.classList.add('selected', 'fas');
-                        s.classList.remove('far');
-                    } else {
-                        s.classList.remove('selected', 'fas');
-                        s.classList.add('far');
+        // When modal opens
+        reviewModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            document.getElementById('order_id').value = button.getAttribute('data-order-id');
+            document.getElementById('product_id').value = button.getAttribute('data-product-id');
+            resetStars();
+            
+            // Check for existing review
+            fetch(`/reviews/check?order_id=${button.getAttribute('data-order-id')}&product_id=${button.getAttribute('data-product-id')}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.review) {
+                        // Populate existing review
+                        setRating(data.review.rating);
+                        document.getElementById('comment').value = data.review.comment || '';
                     }
                 });
-                
-                // Update hidden input and text
-                ratingInput.value = rating;
-                ratingText.textContent = ratingMessages[rating];
-            });
-
-            // Hover effects
-            star.addEventListener('mouseover', function() {
-                const hoverRating = parseInt(this.getAttribute('data-rating'));
-                stars.forEach(s => {
-                    const starNum = parseInt(s.getAttribute('data-rating'));
-                    s.classList.toggle('hovered', starNum <= hoverRating);
-                });
-            });
-
-            star.addEventListener('mouseout', function() {
-                stars.forEach(s => s.classList.remove('hovered'));
-            });
         });
 
-        // Reset stars when modal closes
-        document.getElementById('reviewModal').addEventListener('hidden.bs.modal', resetStars);
+        function resetStars() {
+            document.querySelectorAll('.star').forEach(star => {
+                star.classList.remove('selected', 'hovered', 'fas');
+                star.classList.add('far');
+            });
+            document.getElementById('rating').value = "0";
+            document.getElementById('rating-text').textContent = "Tap to rate";
+            document.getElementById('rating-text').classList.remove('text-danger');
+        }
+
+        function setRating(rating) {
+            const stars = document.querySelectorAll('.star');
+            const ratingText = document.getElementById('rating-text');
+            const messages = ["Tap to rate", "Poor", "Fair", "Good", "Very Good", "Excellent"];
+            
+            stars.forEach((star, index) => {
+                const starRating = parseInt(star.getAttribute('data-rating'));
+                if (starRating <= rating) {
+                    star.classList.add('fas', 'selected');
+                    star.classList.remove('far');
+                } else {
+                    star.classList.remove('fas', 'selected');
+                    star.classList.add('far');
+                }
+            });
+            
+            document.getElementById('rating').value = rating;
+            ratingText.textContent = messages[rating];
+        }
+
+        // Star rating click handler
+        document.querySelector('.rating-stars').addEventListener('click', function(e) {
+            if (e.target.classList.contains('star')) {
+                const rating = parseInt(e.target.getAttribute('data-rating'));
+                setRating(rating);
+            }
+        });
+
+        // Hover effects
+        document.querySelector('.rating-stars').addEventListener('mouseover', function(e) {
+            if (e.target.classList.contains('star')) {
+                const hoverRating = parseInt(e.target.getAttribute('data-rating'));
+                document.querySelectorAll('.star').forEach(star => {
+                    const starRating = parseInt(star.getAttribute('data-rating'));
+                    star.classList.toggle('hovered', starRating <= hoverRating);
+                });
+            }
+        });
+
+        document.querySelector('.rating-stars').addEventListener('mouseout', function() {
+            document.querySelectorAll('.star').forEach(star => {
+                star.classList.remove('hovered');
+            });
+        });
 
         // Form validation
         document.getElementById('reviewForm').addEventListener('submit', function(e) {
-            if (ratingInput.value === "0") {
+            if (document.getElementById('rating').value === "0") {
                 e.preventDefault();
+                const ratingText = document.getElementById('rating-text');
                 ratingText.textContent = "Please select a rating";
                 ratingText.classList.add('text-danger');
+                
+                document.querySelectorAll('.star').forEach(star => {
+                    star.style.animation = 'shake 0.5s';
+                    star.addEventListener('animationend', () => {
+                        star.style.animation = '';
+                    });
+                });
             }
         });
     });
