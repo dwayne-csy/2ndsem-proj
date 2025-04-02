@@ -51,10 +51,33 @@ class Product extends Model
     {
         return $this->hasMany(Review::class, 'product_id', 'product_id');
     }
-    
+
     public function userReview($userId)
     {
         return $this->reviews()->where('user_id', $userId)->first();
     }
 
+    // New methods for review functionality
+    public function getAverageRatingAttribute()
+    {
+        return $this->reviews()->avg('rating') ?? 0;
+    }
+
+    public function getRatingCountAttribute()
+    {
+        return $this->reviews()->count();
+    }
+
+    public function getStarRatingAttribute()
+    {
+        $avgRating = $this->average_rating;
+        $fullStars = floor($avgRating);
+        $hasHalfStar = ($avgRating - $fullStars) >= 0.5;
+
+        $stars = str_repeat('★', $fullStars);
+        $stars .= $hasHalfStar ? '½' : '';
+        $stars .= str_repeat('☆', 5 - ceil($avgRating));
+
+        return $stars;
+    }
 }

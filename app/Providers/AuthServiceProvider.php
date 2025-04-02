@@ -2,7 +2,7 @@
 
 namespace App\Providers;
 
-// use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 
 class AuthServiceProvider extends ServiceProvider
@@ -23,6 +23,22 @@ class AuthServiceProvider extends ServiceProvider
     {
         $this->registerPolicies();
 
-        //
+        // Define review deletion gate
+        Gate::define('delete-review', function ($user, $review) {
+            // Admin or review owner can delete
+            return $user->role === 'admin' || $user->id === $review->user_id;
+        });
+
+        // Alternative policy-style definition (recommended if you have many review-related gates)
+        Gate::define('update-review', function ($user, $review) {
+            return $user->id === $review->user_id;
+        });
+
+        // If you're using roles/permissions, consider:
+        Gate::before(function ($user) {
+            if ($user->role === 'admin') {
+                return true;
+            }
+        });
     }
 }

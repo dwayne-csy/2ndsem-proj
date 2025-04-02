@@ -74,12 +74,12 @@
                             <p class="card-text"><strong>Price:</strong> $<?php echo e(number_format($p->sell_price, 2)); ?></p>
                             <p class="card-text"><strong>Stock:</strong> <?php echo e($p->stock); ?></p>
                             
-                            <!-- Product Rating Display -->
-                            <?php if($p->reviews->count() > 0): ?>
-                                <div class="mb-3">
+                            <!-- Enhanced Product Rating Display -->
+                            <div class="mb-3">
+                                <?php if($p->reviews->count() > 0): ?>
                                     <div class="d-flex align-items-center mb-1">
                                         <?php
-                                            $avgRating = $p->reviews->avg('rating');
+                                            $avgRating = $p->average_rating;
                                             $fullStars = floor($avgRating);
                                             $hasHalfStar = ($avgRating - $fullStars) >= 0.5;
                                         ?>
@@ -93,14 +93,34 @@
                                                 <i class="far fa-star text-warning"></i>
                                             <?php endif; ?>
                                         <?php endfor; ?>
-                                        <span class="ms-2"><?php echo e(number_format($avgRating, 1)); ?> (<?php echo e($p->reviews->count()); ?> reviews)</span>
+                                        <span class="ms-2"><?php echo e(number_format($avgRating, 1)); ?> (<?php echo e($p->reviews_count); ?> reviews)</span>
                                     </div>
-                                </div>
-                            <?php else: ?>
-                                <div class="mb-3 text-muted">
-                                    <i class="far fa-star"></i> No reviews yet
-                                </div>
-                            <?php endif; ?>
+                                    
+                                    <!-- Display top 2 reviews -->
+                                    <div class="mt-2">
+                                        <?php $__currentLoopData = $p->reviews->take(2); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $review): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                                            <div class="review-item mb-2 pb-2 border-bottom">
+                                                <div class="d-flex justify-content-between">
+                                                    <strong><?php echo e($review->user->name); ?></strong>
+                                                    <div>
+                                                        <?php for($i = 1; $i <= 5; $i++): ?>
+                                                            <i class="fas fa-star<?php echo e($i > $review->rating ? '-empty' : ''); ?> text-warning"></i>
+                                                        <?php endfor; ?>
+                                                    </div>
+                                                </div>
+                                                <?php if($review->comment): ?>
+                                                    <p class="mb-0 small">"<?php echo e(Str::limit($review->comment, 80)); ?>"</p>
+                                                <?php endif; ?>
+                                                <small class="text-muted"><?php echo e($review->created_at->diffForHumans()); ?></small>
+                                            </div>
+                                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="text-muted">
+                                        <i class="far fa-star"></i> No reviews yet
+                                    </div>
+                                <?php endif; ?>
+                            </div>
                             
                             <form action="<?php echo e(route('cart.add')); ?>" method="POST" class="mb-2">
                                 <?php echo csrf_field(); ?>
@@ -108,10 +128,10 @@
                                 <button type="submit" class="btn btn-primary">Add to Cart</button>
                             </form>
                             
-                            <!-- View Reviews Button -->
-                            <?php if($p->reviews->count() > 0): ?>
+                            <!-- View All Reviews Button -->
+                            <?php if($p->reviews->count() > 2): ?>
                                 <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#reviewsModal-<?php echo e($p->product_id); ?>">
-                                    <i class="fas fa-comment me-1"></i> View Reviews
+                                    <i class="fas fa-comment me-1"></i> View All Reviews (<?php echo e($p->reviews->count()); ?>)
                                 </button>
                             <?php endif; ?>
                         </div>
@@ -130,7 +150,7 @@
                                 <?php if($p->reviews->count() > 0): ?>
                                     <div class="mb-4">
                                         <div class="d-flex align-items-center">
-                                            <h4 class="me-3"><?php echo e(number_format($avgRating, 1)); ?></h4>
+                                            <h4 class="me-3"><?php echo e(number_format($p->average_rating, 1)); ?></h4>
                                             <div>
                                                 <div class="d-flex mb-1">
                                                     <?php for($i = 1; $i <= 5; $i++): ?>
@@ -155,7 +175,7 @@
                                                     <strong><?php echo e($review->user->name ?? 'Anonymous'); ?></strong>
                                                     <div>
                                                         <?php for($i = 1; $i <= 5; $i++): ?>
-                                                            <i class="fas fa-star <?php echo e($i <= $review->rating ? 'text-warning' : 'text-secondary'); ?>"></i>
+                                                            <i class="fas fa-star<?php echo e($i > $review->rating ? '-empty' : ''); ?> text-warning"></i>
                                                         <?php endfor; ?>
                                                     </div>
                                                 </div>
@@ -194,10 +214,11 @@
     </div>
     <?php endif; ?>
 </div>
-<?php $__env->stopSection(); ?>
 
 <?php $__env->startSection('scripts'); ?>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+<?php $__env->stopSection(); ?>
+
 <?php $__env->stopSection(); ?>
 <?php echo $__env->make('layouts.app', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?><?php /**PATH C:\xampp\htdocs\stylesphere\resources\views/home.blade.php ENDPATH**/ ?>

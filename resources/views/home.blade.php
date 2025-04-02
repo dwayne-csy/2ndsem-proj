@@ -75,12 +75,12 @@
                             <p class="card-text"><strong>Price:</strong> ${{ number_format($p->sell_price, 2) }}</p>
                             <p class="card-text"><strong>Stock:</strong> {{ $p->stock }}</p>
                             
-                            <!-- Product Rating Display -->
-                            @if($p->reviews->count() > 0)
-                                <div class="mb-3">
+                            <!-- Enhanced Product Rating Display -->
+                            <div class="mb-3">
+                                @if($p->reviews->count() > 0)
                                     <div class="d-flex align-items-center mb-1">
                                         @php
-                                            $avgRating = $p->reviews->avg('rating');
+                                            $avgRating = $p->average_rating;
                                             $fullStars = floor($avgRating);
                                             $hasHalfStar = ($avgRating - $fullStars) >= 0.5;
                                         @endphp
@@ -94,14 +94,34 @@
                                                 <i class="far fa-star text-warning"></i>
                                             @endif
                                         @endfor
-                                        <span class="ms-2">{{ number_format($avgRating, 1) }} ({{ $p->reviews->count() }} reviews)</span>
+                                        <span class="ms-2">{{ number_format($avgRating, 1) }} ({{ $p->reviews_count }} reviews)</span>
                                     </div>
-                                </div>
-                            @else
-                                <div class="mb-3 text-muted">
-                                    <i class="far fa-star"></i> No reviews yet
-                                </div>
-                            @endif
+                                    
+                                    <!-- Display top 2 reviews -->
+                                    <div class="mt-2">
+                                        @foreach($p->reviews->take(2) as $review)
+                                            <div class="review-item mb-2 pb-2 border-bottom">
+                                                <div class="d-flex justify-content-between">
+                                                    <strong>{{ $review->user->name }}</strong>
+                                                    <div>
+                                                        @for($i = 1; $i <= 5; $i++)
+                                                            <i class="fas fa-star{{ $i > $review->rating ? '-empty' : '' }} text-warning"></i>
+                                                        @endfor
+                                                    </div>
+                                                </div>
+                                                @if($review->comment)
+                                                    <p class="mb-0 small">"{{ Str::limit($review->comment, 80) }}"</p>
+                                                @endif
+                                                <small class="text-muted">{{ $review->created_at->diffForHumans() }}</small>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                @else
+                                    <div class="text-muted">
+                                        <i class="far fa-star"></i> No reviews yet
+                                    </div>
+                                @endif
+                            </div>
                             
                             <form action="{{ route('cart.add') }}" method="POST" class="mb-2">
                                 @csrf
@@ -109,10 +129,10 @@
                                 <button type="submit" class="btn btn-primary">Add to Cart</button>
                             </form>
                             
-                            <!-- View Reviews Button -->
-                            @if($p->reviews->count() > 0)
+                            <!-- View All Reviews Button -->
+                            @if($p->reviews->count() > 2)
                                 <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#reviewsModal-{{ $p->product_id }}">
-                                    <i class="fas fa-comment me-1"></i> View Reviews
+                                    <i class="fas fa-comment me-1"></i> View All Reviews ({{ $p->reviews->count() }})
                                 </button>
                             @endif
                         </div>
@@ -131,7 +151,7 @@
                                 @if($p->reviews->count() > 0)
                                     <div class="mb-4">
                                         <div class="d-flex align-items-center">
-                                            <h4 class="me-3">{{ number_format($avgRating, 1) }}</h4>
+                                            <h4 class="me-3">{{ number_format($p->average_rating, 1) }}</h4>
                                             <div>
                                                 <div class="d-flex mb-1">
                                                     @for($i = 1; $i <= 5; $i++)
@@ -156,7 +176,7 @@
                                                     <strong>{{ $review->user->name ?? 'Anonymous' }}</strong>
                                                     <div>
                                                         @for($i = 1; $i <= 5; $i++)
-                                                            <i class="fas fa-star {{ $i <= $review->rating ? 'text-warning' : 'text-secondary' }}"></i>
+                                                            <i class="fas fa-star{{ $i > $review->rating ? '-empty' : '' }} text-warning"></i>
                                                         @endfor
                                                     </div>
                                                 </div>
@@ -194,9 +214,10 @@
     </div>
     @endif
 </div>
-@endsection
 
 @section('scripts')
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+@endsection
+
 @endsection

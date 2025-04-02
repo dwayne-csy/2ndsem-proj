@@ -8,50 +8,42 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\ManageReviewController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReviewController;
 
+Route::get('/', function () {
+    return view('landing');
+});
 
-//REGISTER
+Route::view('/login', 'auth.login')->name('login');
+Route::view('/register', 'auth.register')->name('register');
+
+// REGISTER
 Route::get('register', [RegisterController::class, 'showRegistrationForm'])->name('register');
 Route::post('register', [RegisterController::class, 'register']);
-//LOGIN
+
+// LOGIN
 Route::get('login', [LoginController::class, 'showLoginForm'])->name('login');
 Route::post('login', [LoginController::class, 'login']);
-//LOGOUT
+
+// LOGOUT
 Route::post('logout', [LoginController::class, 'logout'])->name('logout');
 
-
-
-// Admin Routes (Protected with Auth & Admin Middleware)
+// Admin Routes
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
-    // Admin Dashboard
+    // Dashboard
     Route::get('/', [AdminController::class, 'index'])->name('dashboard');
 
     // Product Routes
-    Route::get('product', [ProductController::class, 'index'])->name('product.index');
-    Route::get('product/create', [ProductController::class, 'create'])->name('product.create');
-    Route::post('product/store', [ProductController::class, 'store'])->name('product.store');
-    Route::get('product/{product}/edit', [ProductController::class, 'edit'])->name('product.edit');
-    Route::put('product/{product}', [ProductController::class, 'update'])->name('product.update');
-    Route::delete('product/{product}', [ProductController::class, 'destroy'])->name('product.destroy');
-
-    //EXCEL
+    Route::resource('product', ProductController::class)->except(['create', 'store']);
     Route::get('/product/import', [ProductController::class, 'showImportForm'])->name('product.import');
     Route::post('/product/import', [ProductController::class, 'import'])->name('product.import.submit');
 
-
     // Supplier Routes
-    Route::get('supplier', [SupplierController::class, 'index'])->name('supplier.index');
-    Route::get('supplier/create', [SupplierController::class, 'create'])->name('supplier.create');
-    Route::post('supplier/store', [SupplierController::class, 'store'])->name('supplier.store');
-    Route::get('supplier/{supplier}/edit', [SupplierController::class, 'edit'])->name('supplier.edit');
-    Route::put('supplier/{supplier}', [SupplierController::class, 'update'])->name('supplier.update');
-    Route::delete('supplier/{supplier}', [SupplierController::class, 'destroy'])->name('supplier.destroy');
-    
-    //EXCEL
+    Route::resource('supplier', SupplierController::class);
     Route::get('suppliers/import', [SupplierController::class, 'showImportForm'])->name('suppliers.import'); 
     Route::post('suppliers/import', [SupplierController::class, 'import'])->name('suppliers.import.process');
     
@@ -62,41 +54,39 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('users/{user}/role', [UserController::class, 'updateRole'])->name('users.updateRole');
 
     // Order Routes
-    Route::get('orders', [OrderController::class, 'index'])->name('orders.index'); // Fixed: Removed /admin prefix
-    Route::post('orders/{id}/accept', [OrderController::class, 'accept'])->name('orders.accept'); // Fixed: Removed /admin prefix
-    Route::post('orders/{id}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel'); // Fixed: Removed /admin prefix
+    Route::get('orders', [OrderController::class, 'index'])->name('orders.index');
+    Route::post('orders/{id}/accept', [OrderController::class, 'accept'])->name('orders.accept');
+    Route::post('orders/{id}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
+
+    // Review Routes
+    Route::get('reviews', [ManageReviewController::class, 'index'])->name('reviews.index');
+    Route::get('reviews/{review}', [ManageReviewController::class, 'show'])->name('reviews.show');
+    Route::delete('reviews/{review}', [ManageReviewController::class, 'destroy'])->name('reviews.destroy');
 });
+
+// Authenticated User Routes
 Route::middleware('auth')->group(function () {
-    // PROFILE ROUTES
+    // Profile
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 
-    // CART ROUTES
+    // Cart
     Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
     Route::post('/cart/add', [CartController::class, 'addToCart'])->name('cart.add');
     Route::delete('/cart/remove/{id}', [CartController::class, 'removeFromCart'])->name('cart.remove');
     Route::put('/cart/update/{id}', [CartController::class, 'update'])->name('cart.update');
     Route::post('/cart/checkout', [CartController::class, 'checkout'])->name('cart.checkout');
 
-    // ORDER HISTORY ROUTE
+    // Orders
     Route::get('/orders/history', [OrderController::class, 'history'])->name('orders.history');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
 
-
+    // User Reviews
     Route::post('/reviews', [ReviewController::class, 'store'])->name('reviews.store');
-    Route::get('/reviews/get', [ReviewController::class, 'getReview'])->name('reviews.get');
     Route::get('/reviews/check', [ReviewController::class, 'check'])->name('reviews.check');
+    Route::delete('/reviews/{review}', [ReviewController::class, 'destroy'])->name('user.reviews.destroy');
+    Route::get('/reviews/can-review', [ReviewController::class, 'canReview'])->name('reviews.can-review');
 });
 
-    
-// Regular user route
+// Home Route
 Route::get('/home', [HomeController::class, 'index'])->name('home');
-
-Route::middleware(['auth', 'user.status'])->group(function () {
-    // Protected routes
-});
-
-
-
-
-

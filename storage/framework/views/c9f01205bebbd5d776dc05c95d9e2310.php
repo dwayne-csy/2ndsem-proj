@@ -89,16 +89,30 @@
                                         </a>
                                         <?php if($order->status === 'accepted'): ?>
                                             <?php
-                                                // Get first product in order that hasn't been reviewed by current user
-                                                $unreviewedProduct = $order->orderLines->first(function($line) {
-                                                    return !$line->product->reviews->where('user_id', auth()->id())->count();
+                                                $unreviewedProduct = $order->orderLines->first(function($line) use ($order) {
+                                                    return !$line->product->reviews()
+                                                        ->where('user_id', auth()->id())
+                                                        ->where('order_id', $order->id)
+                                                        ->exists();
                                                 })->product ?? null;
                                                 
-                                                // Or get first product if you want to allow multiple reviews per product
-                                                // $unreviewedProduct = $order->orderLines->first()->product ?? null;
+                                                $reviewedProduct = $order->orderLines->first(function($line) use ($order) {
+                                                    return $line->product->reviews()
+                                                        ->where('user_id', auth()->id())
+                                                        ->where('order_id', $order->id)
+                                                        ->exists();
+                                                })->product ?? null;
                                             ?>
                                             
-                                            <?php if($unreviewedProduct): ?>
+                                            <?php if($reviewedProduct): ?>
+                                                <button class="btn btn-sm btn-warning rounded-pill px-3 edit-review-btn" 
+                                                        data-bs-toggle="modal" 
+                                                        data-bs-target="#reviewModal"
+                                                        data-order-id="<?php echo e($order->id); ?>"
+                                                        data-product-id="<?php echo e($reviewedProduct->product_id); ?>">
+                                                    <i class="fas fa-edit me-1"></i> Edit Review
+                                                </button>
+                                            <?php elseif($unreviewedProduct): ?>
                                                 <button class="btn btn-sm btn-success rounded-pill px-3 review-btn" 
                                                         data-bs-toggle="modal" 
                                                         data-bs-target="#reviewModal"
@@ -142,36 +156,80 @@
                 <h5 class="modal-title" id="reviewModalLabel">Rate Your Product</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form id="reviewForm" method="POST" action="<?php echo e(route('reviews.store')); ?>">
-                <?php echo csrf_field(); ?>
-                <input type="hidden" name="order_id" id="order_id">
-                <input type="hidden" name="product_id" id="product_id">
-                <div class="modal-body">
-                    <div class="text-center mb-4">
-                        <h6 class="mb-3">How was your experience with this product?</h6>
-                        <div class="rating-stars mb-2">
-                            <i class="far fa-star fa-2x star" data-rating="1"></i>
-                            <i class="far fa-star fa-2x star" data-rating="2"></i>
-                            <i class="far fa-star fa-2x star" data-rating="3"></i>
-                            <i class="far fa-star fa-2x star" data-rating="4"></i>
-                            <i class="far fa-star fa-2x star" data-rating="5"></i>
+            <div class="modal-body">
+                <div id="review-loading" class="text-center py-4 d-none">
+                    <div class="spinner-border text-primary mb-2" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="text-muted">Checking existing review...</p>
+                </div>
+                
+                <div id="review-form-container">
+                    <form id="reviewForm">
+                        <?php echo csrf_field(); ?>
+                        <input type="hidden" name="order_id" id="order_id">
+                        <input type="hidden" name="product_id" id="product_id">
+                        <div class="text-center mb-4">
+                            <div id="product-info" class="mb-3">
+                                <!-- Product info will be inserted here -->
+                            </div>
+                            <h6 class="mb-3">How was your experience with this product?</h6>
+                            <div class="rating-stars mb-2">
+                                <i class="far fa-star fa-2x star" data-rating="1"></i>
+                                <i class="far fa-star fa-2x star" data-rating="2"></i>
+                                <i class="far fa-star fa-2x star" data-rating="3"></i>
+                                <i class="far fa-star fa-2x star" data-rating="4"></i>
+                                <i class="far fa-star fa-2x star" data-rating="5"></i>
+                            </div>
+                            <small class="text-muted" id="rating-text">Tap to rate</small>
+                            <input type="hidden" name="rating" id="rating" value="0" required>
                         </div>
-                        <small class="text-muted" id="rating-text">Tap to rate</small>
-                        <input type="hidden" name="rating" id="rating" value="0" required>
-                    </div>
+                        <div class="mb-3">
+                            <label for="comment" class="form-label">Your Review (Optional)</label>
+                            <textarea class="form-control" id="comment" name="comment" rows="3" placeholder="Share your thoughts about this product..."></textarea>
+                            <small class="text-muted">Maximum 1000 characters</small>
+                            <div class="invalid-feedback" id="comment-error"></div>
+                        </div>
+                        <div class="d-flex justify-content-between mt-4">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary" id="submit-review">
+                                <span id="submit-text">Submit Review</span>
+                                <span id="submit-loading" class="d-none">
+                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                    <span class="ms-1">Submitting...</span>
+                                </span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                
+                <div id="review-success" class="text-center py-4 d-none">
                     <div class="mb-3">
-                        <label for="comment" class="form-label">Your Review (Optional)</label>
-                        <textarea class="form-control" id="comment" name="comment" rows="3" placeholder="Share your thoughts about this product..."></textarea>
+                        <i class="fas fa-check-circle text-success fa-4x"></i>
+                    </div>
+                    <h4 class="mb-2" id="success-message">Review submitted successfully!</h4>
+                    <p class="text-muted">Thank you for sharing your feedback.</p>
+                    <button type="button" class="btn btn-primary mt-3" data-bs-dismiss="modal">Close</button>
+                </div>
+                
+                <div id="review-error" class="text-center py-4 d-none">
+                    <div class="mb-3">
+                        <i class="fas fa-exclamation-circle text-danger fa-4x"></i>
+                    </div>
+                    <h4 class="mb-2">Oops! Something went wrong</h4>
+                    <p class="text-muted" id="error-message">Failed to submit your review. Please try again.</p>
+                    <div class="d-flex justify-content-center gap-2 mt-3">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-primary" id="retry-button">Try Again</button>
                     </div>
                 </div>
-                <div class="modal-footer border-0">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Submit Review</button>
-                </div>
-            </form>
+            </div>
         </div>
     </div>
 </div>
+
+<!-- Bootstrap JS Bundle with Popper -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <style>
     .rating-stars {
@@ -184,117 +242,302 @@
         transition: all 0.2s;
         color: #e4e5e9;
     }
-    .rating-stars .star.selected,
-    .rating-stars .star.hovered {
+    .rating-stars .star.selected {
         color: #ffc107;
     }
     .rating-stars .star.hovered {
+        color: #ffc107;
         transform: scale(1.1);
+    }
+    .rating-stars .fas.fa-star {
+        color: #ffc107;
     }
     @keyframes shake {
         0%, 100% { transform: translateX(0); }
         20%, 60% { transform: translateX(-5px); }
         40%, 80% { transform: translateX(5px); }
     }
+    .product-image {
+        width: 80px;
+        height: 80px;
+        object-fit: cover;
+        border-radius: 8px;
+    }
 </style>
 
-<?php $__env->startSection('scripts'); ?>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const reviewModal = document.getElementById('reviewModal');
+document.addEventListener('DOMContentLoaded', function() {
+    const stars = document.querySelectorAll('.rating-stars .star');
+    const ratingInput = document.getElementById('rating');
+    const ratingText = document.getElementById('rating-text');
+    const reviewForm = document.getElementById('reviewForm');
+    const reviewModal = document.getElementById('reviewModal');
+    const commentInput = document.getElementById('comment');
+    
+    // Get modal instance safely
+    const getModalInstance = (el) => {
+        try {
+            return bootstrap.Modal.getInstance(el) || new bootstrap.Modal(el);
+        } catch (e) {
+            console.error("Failed to get modal instance:", e);
+            return new bootstrap.Modal(el);
+        }
+    };
+
+    // Reset stars function
+    function resetStars() {
+        stars.forEach(star => {
+            star.className = 'far fa-star fa-2x star';
+        });
+        ratingInput.value = "0";
+        ratingText.textContent = "Tap to rate";
+        ratingText.classList.remove('text-danger');
+    }
+    
+    // Set rating function
+    function setRating(rating) {
+        const messages = ["Tap to rate", "Poor", "Fair", "Good", "Very Good", "Excellent"];
         
-        // When modal opens
-        reviewModal.addEventListener('show.bs.modal', function(event) {
-            const button = event.relatedTarget;
-            document.getElementById('order_id').value = button.getAttribute('data-order-id');
-            document.getElementById('product_id').value = button.getAttribute('data-product-id');
-            resetStars();
-            
-            // Check for existing review
-            fetch(`/reviews/check?order_id=${button.getAttribute('data-order-id')}&product_id=${button.getAttribute('data-product-id')}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.review) {
-                        // Populate existing review
-                        setRating(data.review.rating);
-                        document.getElementById('comment').value = data.review.comment || '';
-                    }
-                });
+        stars.forEach(star => {
+            const starRating = parseInt(star.getAttribute('data-rating'));
+            if (starRating <= rating) {
+                star.className = 'fas fa-star fa-2x star selected';
+            } else {
+                star.className = 'far fa-star fa-2x star';
+            }
         });
-
-        function resetStars() {
-            document.querySelectorAll('.star').forEach(star => {
-                star.classList.remove('selected', 'hovered', 'fas');
-                star.classList.add('far');
-            });
-            document.getElementById('rating').value = "0";
-            document.getElementById('rating-text').textContent = "Tap to rate";
-            document.getElementById('rating-text').classList.remove('text-danger');
-        }
-
-        function setRating(rating) {
-            const stars = document.querySelectorAll('.star');
-            const ratingText = document.getElementById('rating-text');
-            const messages = ["Tap to rate", "Poor", "Fair", "Good", "Very Good", "Excellent"];
+        
+        ratingInput.value = rating;
+        ratingText.textContent = messages[rating];
+        ratingText.classList.remove('text-danger');
+    }
+    
+    // Show loading state
+    function showLoading() {
+        document.getElementById('review-form-container').classList.add('d-none');
+        document.getElementById('review-loading').classList.remove('d-none');
+        document.getElementById('review-success').classList.add('d-none');
+        document.getElementById('review-error').classList.add('d-none');
+    }
+    
+    // Show form
+    function showForm() {
+        document.getElementById('review-form-container').classList.remove('d-none');
+        document.getElementById('review-loading').classList.add('d-none');
+        document.getElementById('review-success').classList.add('d-none');
+        document.getElementById('review-error').classList.add('d-none');
+    }
+    
+    // Show success
+    function showSuccess(message) {
+        document.getElementById('review-form-container').classList.add('d-none');
+        document.getElementById('review-loading').classList.add('d-none');
+        document.getElementById('review-success').classList.remove('d-none');
+        document.getElementById('review-error').classList.add('d-none');
+        document.getElementById('success-message').textContent = message;
+    }
+    
+    // Show error
+    function showError(message) {
+        document.getElementById('review-form-container').classList.add('d-none');
+        document.getElementById('review-loading').classList.add('d-none');
+        document.getElementById('review-success').classList.add('d-none');
+        document.getElementById('review-error').classList.remove('d-none');
+        document.getElementById('error-message').textContent = message;
+    }
+    
+    // Initialize modal event
+    reviewModal.addEventListener('show.bs.modal', function(event) {
+        const button = event.relatedTarget;
+        const orderId = button.getAttribute('data-order-id');
+        const productId = button.getAttribute('data-product-id');
+        
+        document.getElementById('order_id').value = orderId;
+        document.getElementById('product_id').value = productId;
+        
+        resetStars();
+        commentInput.value = '';
+        showLoading();
+        
+        // Check if review already exists
+        fetch(`/reviews/check?order_id=${orderId}&product_id=${productId}`, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            showForm();
             
-            stars.forEach((star, index) => {
-                const starRating = parseInt(star.getAttribute('data-rating'));
-                if (starRating <= rating) {
-                    star.classList.add('fas', 'selected');
-                    star.classList.remove('far');
-                } else {
-                    star.classList.remove('fas', 'selected');
-                    star.classList.add('far');
+            // Fetch product details for the modal
+            fetch(`/products/${productId}/info`, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
                 }
+            })
+            .then(response => response.json())
+            .then(productData => {
+                if (productData.success) {
+                    document.getElementById('product-info').innerHTML = `
+                        <div class="d-flex align-items-center justify-content-center mb-3">
+                            <img src="${productData.product.image}" alt="${productData.product.name}" class="product-image me-3">
+                            <div class="text-start">
+                                <h6 class="mb-1">${productData.product.name}</h6>
+                                <span class="text-muted small">${productData.product.category}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching product info:', error);
             });
             
-            document.getElementById('rating').value = rating;
-            ratingText.textContent = messages[rating];
-        }
-
-        // Star rating click handler
-        document.querySelector('.rating-stars').addEventListener('click', function(e) {
-            if (e.target.classList.contains('star')) {
-                const rating = parseInt(e.target.getAttribute('data-rating'));
-                setRating(rating);
+            // If review exists, prefill form
+            if (data.review) {
+                setRating(data.review.rating);
+                commentInput.value = data.review.comment || '';
+                document.getElementById('submit-text').textContent = 'Update Review';
+                document.getElementById('reviewModalLabel').textContent = 'Edit Your Review';
+            } else {
+                document.getElementById('submit-text').textContent = 'Submit Review';
+                document.getElementById('reviewModalLabel').textContent = 'Rate Your Product';
             }
-        });
-
-        // Hover effects
-        document.querySelector('.rating-stars').addEventListener('mouseover', function(e) {
-            if (e.target.classList.contains('star')) {
-                const hoverRating = parseInt(e.target.getAttribute('data-rating'));
-                document.querySelectorAll('.star').forEach(star => {
-                    const starRating = parseInt(star.getAttribute('data-rating'));
-                    star.classList.toggle('hovered', starRating <= hoverRating);
-                });
-            }
-        });
-
-        document.querySelector('.rating-stars').addEventListener('mouseout', function() {
-            document.querySelectorAll('.star').forEach(star => {
-                star.classList.remove('hovered');
-            });
-        });
-
-        // Form validation
-        document.getElementById('reviewForm').addEventListener('submit', function(e) {
-            if (document.getElementById('rating').value === "0") {
-                e.preventDefault();
-                const ratingText = document.getElementById('rating-text');
-                ratingText.textContent = "Please select a rating";
-                ratingText.classList.add('text-danger');
-                
-                document.querySelectorAll('.star').forEach(star => {
-                    star.style.animation = 'shake 0.5s';
-                    star.addEventListener('animationend', () => {
-                        star.style.animation = '';
-                    });
-                });
-            }
+        })
+        .catch(error => {
+            console.error('Error checking review:', error);
+            showError('Failed to load review data. Please try again.');
         });
     });
+    
+    // Star click event
+    stars.forEach(star => {
+        star.addEventListener('click', function() {
+            const rating = parseInt(this.getAttribute('data-rating'));
+            setRating(rating);
+        });
+        
+        // Hover effects
+        star.addEventListener('mouseover', function() {
+            const hoverRating = parseInt(this.getAttribute('data-rating'));
+            
+            stars.forEach(s => {
+                const starRating = parseInt(s.getAttribute('data-rating'));
+                if (starRating <= hoverRating) {
+                    if (!s.classList.contains('selected')) {
+                        s.classList.remove('far');
+                        s.classList.add('fas', 'hovered');
+                    }
+                }
+            });
+        });
+        
+        star.addEventListener('mouseout', function() {
+            stars.forEach(s => {
+                if (s.classList.contains('hovered')) {
+                    s.classList.remove('fas', 'hovered');
+                    s.classList.add('far');
+                }
+            });
+        });
+    });
+    
+    // Retry button event
+    document.getElementById('retry-button')?.addEventListener('click', function() {
+        showForm();
+    });
+    
+    // Character count for comment
+    commentInput.addEventListener('input', function() {
+        if (this.value.length > 1000) {
+            this.value = this.value.substring(0, 1000);
+        }
+    });
+    
+    // Form submission
+    reviewForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Rating validation
+        if (ratingInput.value === "0") {
+            ratingText.textContent = "Please select a rating";
+            ratingText.classList.add('text-danger');
+            
+            const starsContainer = document.querySelector('.rating-stars');
+            starsContainer.style.animation = 'shake 0.5s';
+            
+            starsContainer.addEventListener('animationend', () => {
+                starsContainer.style.animation = '';
+            }, {once: true});
+            
+            return;
+        }
+        
+        // Comment validation
+        if (commentInput.value.length > 1000) {
+            document.getElementById('comment-error').textContent = 'Comment must be less than 1000 characters';
+            commentInput.classList.add('is-invalid');
+            return;
+        }
+        
+        // Show loading state in button
+        document.getElementById('submit-text').classList.add('d-none');
+        document.getElementById('submit-loading').classList.remove('d-none');
+        
+        // Get form data
+        const formData = new FormData(reviewForm);
+        
+        // Submit via fetch API
+        fetch("<?php echo e(route('reviews.store')); ?>", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRF-TOKEN': "<?php echo e(csrf_token()); ?>",
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showSuccess(data.message);
+                
+                // Update button in the orders list
+                const reviewBtn = document.querySelector(`[data-order-id="${formData.get('order_id')}"][data-product-id="${formData.get('product_id')}"]`);
+                if (reviewBtn) {
+                    if (reviewBtn.classList.contains('review-btn')) {
+                        reviewBtn.outerHTML = `
+                            <button class="btn btn-sm btn-warning rounded-pill px-3 edit-review-btn" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#reviewModal"
+                                    data-order-id="${formData.get('order_id')}"
+                                    data-product-id="${formData.get('product_id')}">
+                                <i class="fas fa-edit me-1"></i> Edit Review
+                            </button>
+                        `;
+                    } else if (reviewBtn.classList.contains('edit-review-btn')) {
+                        // Just close the modal for edit actions
+                        const modal = getModalInstance(reviewModal);
+                        modal.hide();
+                    }
+                }
+            } else {
+                throw new Error(data.message || 'Failed to submit review');
+            }
+        })
+        .catch(error => {
+            console.error('Error submitting review:', error);
+            showError(error.message || 'Failed to submit review. Please try again.');
+        })
+        .finally(() => {
+            // Reset button state
+            document.getElementById('submit-text').classList.remove('d-none');
+            document.getElementById('submit-loading').classList.add('d-none');
+        });
+    });
+});
 </script>
-<?php $__env->stopSection(); ?>
 <?php $__env->stopSection(); ?>
 <?php echo $__env->make('layouts.app', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?><?php /**PATH C:\xampp\htdocs\stylesphere\resources\views/orders/history.blade.php ENDPATH**/ ?>

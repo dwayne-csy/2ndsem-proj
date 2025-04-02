@@ -10,7 +10,6 @@ class Order extends Model
 {
     use HasFactory;
 
-    // Define order statuses
     const STATUS_PENDING = 'pending';
     const STATUS_ACCEPTED = 'accepted';
     const STATUS_CANCELLED = 'cancelled';
@@ -31,7 +30,6 @@ class Order extends Model
         return $this->hasMany(OrderLine::class);
     }
 
-    // Status check methods
     public function isPending()
     {
         return $this->status === self::STATUS_PENDING;
@@ -47,9 +45,6 @@ class Order extends Model
         return $this->status === self::STATUS_CANCELLED;
     }
 
-    /**
-     * Accept the order and decrease product stocks
-     */
     public function accept()
     {
         if (!$this->isPending()) {
@@ -73,9 +68,6 @@ class Order extends Model
         return true;
     }
 
-    /**
-     * Cancel the order and optionally restore stocks
-     */
     public function cancel($restoreStock = false)
     {
         if (!$this->isPending() && !$this->isAccepted()) {
@@ -85,8 +77,7 @@ class Order extends Model
         DB::transaction(function () use ($restoreStock) {
             $previousStatus = $this->status;
             $this->update(['status' => self::STATUS_CANCELLED]);
-            
-            // Restore stock if cancelling an accepted order and restoreStock is true
+
             if ($restoreStock && $previousStatus === self::STATUS_ACCEPTED) {
                 foreach ($this->orderLines as $orderLine) {
                     if ($orderLine->product) {
@@ -99,34 +90,31 @@ class Order extends Model
         return true;
     }
 
-    /**
-     * Calculate the total items in the order
-     */
     public function totalItems()
     {
         return $this->orderLines->sum('quantity');
     }
 
-    /**
-     * Scope for user's order history
-     */
     public function scopeUserHistory($query)
     {
         return $query->where('user_id', auth()->id())
-                    ->with(['orderLines.product'])
+                    ->with(['orderLines.product.reviews' => function($q) {
+                        $q->where('user_id', auth()->id());
+                    }])
                     ->latest();
     }
 
-    //REVIEW
     public function reviews()
-{
-    return $this->hasManyThrough(
-        Review::class,
-        OrderLine::class,
-        'order_id', // Foreign key on OrderLine table
-        'product_id', // Foreign key on Review table
-        'id', // Local key on Order table
-        'product_id' // Local key on OrderLine table
-    );
-}
+    {
+        return $this->hasMany(Review::class);
+    }
+
+    // New method to check if order can be reviewed
+    public function canBeReviewed()
+    {
+        return $this->status === self::STATUS_ACCEPTED && 
+               $this->orderLines->contains(function($line) {
+                   return !$line->product->reviews->where('user_id', auth()->id())->count();
+               });
+    }
 }
