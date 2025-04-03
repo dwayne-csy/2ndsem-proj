@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\ProductController;
@@ -18,18 +19,18 @@ Route::get('/', function () {
     return view('landing');
 });
 
-Route::view('/login', 'auth.login')->name('login');
-Route::view('/register', 'auth.register')->name('register');
+// Authentication Routes
+Auth::routes(['register' => false, 'login' => false]); // Disable default auth routes
 
-// REGISTER
+// Custom Register Routes
 Route::get('register', [RegisterController::class, 'showRegistrationForm'])->name('register');
 Route::post('register', [RegisterController::class, 'register']);
 
-// LOGIN
+// Custom Login Routes
 Route::get('login', [LoginController::class, 'showLoginForm'])->name('login');
 Route::post('login', [LoginController::class, 'login']);
 
-// LOGOUT
+// Logout Route
 Route::post('logout', [LoginController::class, 'logout'])->name('logout');
 
 // Admin Routes
@@ -64,8 +65,11 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::delete('reviews/{review}', [ManageReviewController::class, 'destroy'])->name('reviews.destroy');
 });
 
-// Authenticated User Routes
-Route::middleware('auth')->group(function () {
+// User Routes (strictly for user role only)
+Route::middleware(['auth', 'user'])->group(function () {
+    // Home Dashboard
+    Route::get('/home', [HomeController::class, 'index'])->name('home');
+
     // Profile
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -81,12 +85,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/orders/history', [OrderController::class, 'history'])->name('orders.history');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
 
-    // User Reviews
+    // Reviews
     Route::post('/reviews', [ReviewController::class, 'store'])->name('reviews.store');
     Route::get('/reviews/check', [ReviewController::class, 'check'])->name('reviews.check');
     Route::delete('/reviews/{review}', [ReviewController::class, 'destroy'])->name('user.reviews.destroy');
     Route::get('/reviews/can-review', [ReviewController::class, 'canReview'])->name('reviews.can-review');
 });
 
-// Home Route
-Route::get('/home', [HomeController::class, 'index'])->name('home');
+// Shared authenticated routes (accessible by both roles if needed)
+Route::middleware('auth')->group(function () {
+    // Add any routes that should be accessible by both roles here
+});

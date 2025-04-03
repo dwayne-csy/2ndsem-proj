@@ -3,13 +3,22 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Foundation\Auth\AuthenticatesUsers;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Foundation\Auth\AuthenticatesUsers;
 
 class LoginController extends Controller
 {
+    /*
+    |--------------------------------------------------------------------------
+    | Login Controller
+    |--------------------------------------------------------------------------
+    |
+    | This controller handles authenticating users for the application and
+    | redirecting them to your home screen. The controller uses a trait
+    | to conveniently provide its functionality to your applications.
+    |
+    */
+
     use AuthenticatesUsers;
 
     /**
@@ -17,7 +26,7 @@ class LoginController extends Controller
      *
      * @var string
      */
-    protected $redirectTo = '/home'; // Default for regular users
+    protected $redirectTo = '/home';
 
     /**
      * Create a new controller instance.
@@ -27,53 +36,38 @@ class LoginController extends Controller
     public function __construct()
     {
         $this->middleware('guest')->except('logout');
-        $this->middleware('auth')->only('logout');
     }
 
     /**
-     * Override the authenticated method to check for the user's role and status.
+     * The user has been authenticated.
      *
-     * @param \Illuminate\Http\Request $request
-     * @param \App\Models\User $user
-     * @return \Illuminate\Http\RedirectResponse
+     * @param  \Illuminate\Http\Request  $request
+     * @param  mixed  $user
+     * @return mixed
      */
     protected function authenticated(Request $request, $user)
     {
-        // Debugging: Check if the method is being called
-        Log::info('User logged in:', ['user_id' => $user->id, 'role' => $user->role, 'status' => $user->status]);
-
-        // Check if the user is inactive
-        if ($user->status === 'inactive') {
-            Auth::logout(); // Log out the user
-            return redirect()->route('login')->withErrors([
-                'email' => 'Your account is inactive. Please contact the administrator.',
-            ]);
-        }
-
-        // Check if the user is an admin
         if ($user->role === 'admin') {
-            Log::info('Redirecting admin to dashboard');
             return redirect()->route('admin.dashboard');
         }
 
-        // Default redirect for regular users
-        Log::info('Redirecting regular user to home');
-        return redirect()->route('home');
+        return redirect()->intended($this->redirectPath());
     }
 
     /**
-     * Log the user out and redirect to the login page.
+     * Log the user out of the application.
      *
-     * @param \Illuminate\Http\Request $request
+     * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\RedirectResponse
      */
     public function logout(Request $request)
     {
-        auth()->logout(); // Log out the user
-        $request->session()->invalidate(); // Invalidate the session
-        $request->session()->regenerateToken(); // Regenerate CSRF token
+        $this->guard()->logout();
 
-        // Redirect to the login page
-        return redirect()->route('login');
+        $request->session()->invalidate();
+
+        $request->session()->regenerateToken();
+
+        return redirect('/');
     }
 }
